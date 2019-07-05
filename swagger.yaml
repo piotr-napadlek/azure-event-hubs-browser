@@ -79,7 +79,7 @@ paths:
           description: In case of successfully removing hub connection
         204:
           description: In case a hub with the given ID did not exist
-  /hubs/{hubId]/partitions:
+  /hubs/{hubId}/partitions:
     get:
       summary: Gets the list of hub partitions along with short summary
       operationId: gerPartitionsInfo
@@ -111,6 +111,49 @@ paths:
                     beginSequenceNumber: 2
                     lastEnqueuedLink: /hub/gl-ci-rlx-events/overbooking/partitions/1/messages/4
                     messagesLink: /hub/gl-ci-rlx-events/overbooking/partitions/1/messages?startSequenceNumber=2&endSequenceNumber=4
+  /hubs/{hubId}/stats:
+    get:
+      summary: Short statistics of hub
+      operationId: getHubStats
+      parameters:
+        - $ref: '#/components/parameters/HubId'
+      responses:
+        200:
+          description: Stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  activeEventsCount:
+                    type: number
+                    format: int64
+                  lastEnqueuedDateTime:
+                    type: string
+                    format: 'date-time'
+                example:
+                  activeEventsCount: 123
+                  lastEnqueuedDateTime: "2019-07-05T07:04:39.765Z"
+  /hubs/{hubId}/partitions/{partitionId}/messages:
+    get:
+      summary: Reads all active messages on a partition. Use with care as it might take long time to fetch them all. Bodies are not included in the response.
+      operationId: getPartitionMessages
+      parameters:
+        - $ref: '#/components/parameters/HubId'
+        - name: partitionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: List of partition messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EventHubMessage'
   /hubs/{hubId}/partitions/{partitionId}/messages/{sequenceNumber}:
     get:
       summary: Reads single message from the stream by sequence number
@@ -119,8 +162,21 @@ paths:
         - $ref: '#/components/parameters/HubId'
         - name: partitionId
           in: path
+          required: true
+          schema:
+            type: string
         - name: sequenceNumber
           in: path
+          required: true
+          schema:
+            type: string
+        - name: includeBody
+          in: query
+          required: false
+          description: Indicates whether message body should be included. Set to false to fetch only metadata.
+          schema:
+            type: boolean
+            default: true
       responses:
         200:
           description: Single event hub message
@@ -136,6 +192,8 @@ components:
       required: true
       in: path
       description: ID of updated Event Hub connection
+      schema:
+        type: string
   schemas:
     EventHubConnection:
       description: Represents an existing event hub connection
@@ -227,7 +285,7 @@ components:
         lastEnqueuedOffset: "300"
         beginSequenceNumber: 1
         lastEnqueuedLink: /hub/gl-ci-rlx-events/overbooking/partitions/0/messages/12
-        messagesLink: /hub/gl-ci-rlx-events/overbooking/partitions/0/messages?startSequenceNumber=8&endSequenceNumber=12
+        messagesLink: /hub/gl-ci-rlx-events/overbooking/partitions/0/messages
     EventHubDefinition:
       description: Represents new or updated event hub entity
       properties:
@@ -266,6 +324,8 @@ components:
           type: string
         partitionKey:
           type: string
+        selfLink:
+          type: string
         properties:
           type: object
           additionalProperties:
@@ -283,6 +343,7 @@ components:
         enqueuedDateTime: 2019-07-03T23:37:11.122Z
         offset: "223"
         partitionKey: my-partition
+        selfLink: /hubs/hub-ns/hub-name/partitions/0/messages/23
         properties:
           EventId: abcd1234
           EventVersion: 1
