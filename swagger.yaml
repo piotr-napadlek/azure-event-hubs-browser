@@ -1,0 +1,294 @@
+openapi: 3.0.0
+info:
+  description: "Api for browsing Event Hub entities"
+  title: "EventHub REST Api"
+  version: 1.0.0
+paths:
+  /hubs:
+    get:
+      summary: Returns a list of registered hub connections
+      operationId: getHubConnections
+      responses:
+        200:
+          description: List of created event hub connections
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EventHubConnection'
+    post:
+      summary: Creates a new event hub connection
+      operationId: createHubConnection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventHubDefinition'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EventHubDefinition'
+      responses:
+        200:
+          description: Created event hub connection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventHubConnection'
+        409:
+          description: Indicates that such connection already exists and should be updated rather than created
+  /hubs/{hubId}:
+    get:
+      summary: Retruns connected hub info
+      operationId: getHubConnection
+      parameters:
+        - $ref: '#/components/parameters/HubId'
+      responses:
+        200:
+          description: Event hub connection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventHubConnection'
+    put:
+      summary: Updates existing event hub connection
+      operationId: updateHubConnection
+      parameters:
+        - $ref: '#/components/parameters/HubId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventHubDefinition'
+      responses:
+        200:
+          description: Updated event hub connection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventHubConnection'
+    delete:
+      summary: Closes and deletes existing event hub connection
+      operationId: deleteHubConnection
+      parameters:
+        - $ref: '#/components/parameters/HubId'
+      responses:
+        200:
+          description: In case of successfully removing hub connection
+        204:
+          description: In case a hub with the given ID did not exist
+  /hubs/{hubId]/partitions:
+    get:
+      summary: Gets the list of hub partitions along with short summary
+      operationId: gerPartitionsInfo
+      parameters:
+        - $ref: '#/components/parameters/HubId'
+      responses:
+        200:
+          description: List of hub partitions along with short summary
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PartitionInfo'
+                example:
+                  - id: 0
+                    selfLink: /hub/gl-ci-rlx-events/overbooking/partitions/0
+                    lastEnqueuedSequencNumber: 12
+                    lastEnqueuedDateTime: 2019-06-30T11:34:44.417Z
+                    lastEnqueuedOffset: "300"
+                    beginSequenceNumber: 1
+                    lastEnqueuedLink: /hub/gl-ci-rlx-events/overbooking/partitions/0/messages/12
+                    messagesLink: /hub/gl-ci-rlx-events/overbooking/partitions/0/messages?startSequenceNumber=8&endSequenceNumber=12
+                  - id: 1
+                    selfLink: /hub/gl-ci-rlx-events/overbooking/partitions/1
+                    lastEnqueuedSequencNumber: 4
+                    lastEnqueuedDateTime: 2019-06-29T12:04:44.417Z
+                    lastEnqueuedOffset: "11"
+                    beginSequenceNumber: 2
+                    lastEnqueuedLink: /hub/gl-ci-rlx-events/overbooking/partitions/1/messages/4
+                    messagesLink: /hub/gl-ci-rlx-events/overbooking/partitions/1/messages?startSequenceNumber=2&endSequenceNumber=4
+  /hubs/{hubId}/partitions/{partitionId}/messages/{sequenceNumber}:
+    get:
+      summary: Reads single message from the stream by sequence number
+      operationId: getOneBySequenceNumber
+      parameters:
+        - $ref: '#/components/parameters/HubId'
+        - name: partitionId
+          in: path
+        - name: sequenceNumber
+          in: path
+      responses:
+        200:
+          description: Single event hub message
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventHubMessage'
+
+components:
+  parameters:
+    HubId:
+      name: hubId
+      required: true
+      in: path
+      description: ID of updated Event Hub connection
+  schemas:
+    EventHubConnection:
+      description: Represents an existing event hub connection
+      properties:
+        id:
+          type: string
+          description: Unique identifier of a event hub, typically a namespace/name combination
+          required: true
+        selfLink:
+          type: string
+          description: Link to self details
+        eventHubNamespace:
+          type: string
+          required: true
+        eventHubName:
+          type: string
+          required: true
+        consumerGroupName:
+          type: string
+          required: true
+        sasKeyName:
+          type: string
+          required: true
+        sasKeyFirst4Characters:
+          type: string
+          description: First 4 characters of a sas key configured for the event hub (trimmed because of security reasons)
+          required: true
+        partitionCount:
+          type: number
+          required: false
+          description: Amount of partitions found on a given hub
+        createdDateTime:
+          type: string
+          format: 'date-time'
+          required: false
+          description: Timestamp of cration of given event hub entity (usually in UTC)
+        status:
+          type: string
+          required: true
+          enum:
+            - CONNECTED
+            - FAILED
+            - UNAUTHORIZED
+            - CONNECTION_TIMEOUT
+        partitionsLink:
+          type: string
+      example:
+        id: gl-ci-rlx-events/overbooking
+        eventHubNamespace: gl-ci-rlx-events
+        eventHubName: overbooking
+        selfLink: /hub/gl-ci-rlx-events/overbooking
+        consumerGroupName: uk4.roomlynx.net
+        sasKeyName: roomlynx-listen
+        sasKeyFirst4Characters: R3a1
+        status: CONNECTED
+        partitionCount: 2
+        createdDateTime: 2019-06-27T11:15:20.417Z
+        partitionsLink: /hub/gl-ci-rlx-events/overbooking/partitions
+    PartitionInfo:
+      description: Short partition summary
+      properties:
+        id:
+          type: string
+        partitionId:
+          type: string
+        selfLink:
+          type: string
+        lastEnqueuedSequencNumber:
+          type: number
+          format: int64
+        lastEnqueuedDateTime:
+          type: string
+          format: 'date-time'
+        lastEnqueuedOffset:
+          type: string
+        beginSequenceNumber:
+          type: number
+          format: int64
+        lastEnqueuedLink:
+          type: string
+        messagesLink:
+          type: string
+      example:
+        id: 0
+        partitionId: gl-ci-rlx-events/overbooking
+        selfLink: /hub/gl-ci-rlx-events/overbooking/partitions/0
+        lastEnqueuedSequencNumber: 12
+        lastEnqueuedDateTime: 2019-06-30T11:34:44.417Z
+        lastEnqueuedOffset: "300"
+        beginSequenceNumber: 1
+        lastEnqueuedLink: /hub/gl-ci-rlx-events/overbooking/partitions/0/messages/12
+        messagesLink: /hub/gl-ci-rlx-events/overbooking/partitions/0/messages?startSequenceNumber=8&endSequenceNumber=12
+    EventHubDefinition:
+      description: Represents new or updated event hub entity
+      properties:
+        eventHubNamespace:
+          type: string
+          required: true
+        eventHubName:
+          type: string
+          required: true
+        consumerGroupName:
+          type: string
+          required: true
+        sasKeyName:
+          type: string
+          required: true
+        sasKey:
+          type: string
+          required: true
+      example:
+        eventHubNamespace: gl-ci-eh-ns
+        eventHubName: gl-ci-eh
+        consumerGroupName: my-consumer-group
+        sasKeyName: listening-key
+        sasKey: 23fdf23dsagolkasf/fdasf=
+    EventHubMessage:
+      description: Represents single event hub message entity
+      properties:
+        sequenceNumber:
+          type: number
+        partitionId:
+          type: string
+        enqueuedDateTime:
+          type: string
+          format: 'date-time'
+        offset:
+          type: string
+        partitionKey:
+          type: string
+        properties:
+          type: object
+          additionalProperties:
+            type: string|number
+        bodyString:
+          type: string
+        bodyBytesBase64:
+          type: string
+        bodyJson:
+          type: object
+          additionalProperties: true
+      example:
+        sequenceNumber: 23
+        partitionId: "2"
+        enqueuedDateTime: 2019-07-03T23:37:11.122Z
+        offset: "223"
+        partitionKey: my-partition
+        properties:
+          EventId: abcd1234
+          EventVersion: 1
+          EventTimestamp: "2019-01-01T00:00:00Z"
+        bodyString: "{\"key\":\"value\"}"
+        bodyBytesBase64: eyJrZXkiOiJ2YWx1ZSJ9Cg==
+        bodyJson:
+          key: value
+
