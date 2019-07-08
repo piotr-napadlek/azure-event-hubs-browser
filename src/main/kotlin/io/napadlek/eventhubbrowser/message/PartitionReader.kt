@@ -1,91 +1,112 @@
 package io.napadlek.eventhubbrowser.message
 
-import com.fasterxml.jackson.core.JsonParseException
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.ObjectMapper
 import com.microsoft.azure.eventhubs.EventData
 import com.microsoft.azure.eventhubs.EventPosition
 import com.microsoft.azure.eventhubs.PartitionReceiver
+import com.microsoft.azure.eventhubs.ReceiverOptions
 import io.napadlek.eventhubbrowser.hub.EventHubConnectionManager
 import io.napadlek.eventhubbrowser.partition.PartitionInfo
 import io.napadlek.eventhubbrowser.partition.PartitionManager
-import org.mozilla.universalchardet.UniversalDetector
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
 import org.springframework.web.context.annotation.SessionScope
 import org.springframework.web.server.ResponseStatusException
-import java.io.InputStream
-import java.nio.charset.Charset
-import java.nio.charset.StandardCharsets
-import java.nio.charset.UnsupportedCharsetException
 import java.time.Duration
+import java.time.Instant
 import java.time.ZoneOffset
-import java.util.*
 import java.util.concurrent.ConcurrentHashMap
-import java.util.zip.GZIPInputStream
+import javax.servlet.http.Part
 import kotlin.math.min
 
 @Component
 @SessionScope
 class PartitionReader(val partitionManager: PartitionManager,
                       val connectionManager: EventHubConnectionManager,
-                      val mapper: ObjectMapper) {
+                      val messageParser: MessageParser) {
 
     companion object {
-        const val MAX_BATCH = 500
+        const val MAX_SINGLE_RECEIVE = 500L
     }
 
-    val partitionMessages: MutableMap<String, MutableMap<String, Triple<PartitionReceiver, PartitionReceiverPosition, MutableMap<Long, EventData>>>> = ConcurrentHashMap()
+    private val partitionMessages: MutableMap<String, MutableMap<String, PartitionState>> = ConcurrentHashMap()
 
-    fun getAllMessages(hubId: String, partitionId: String): List<EventHubMessage> {
+    fun getAllMessages(hubId: String, partitionId: String, bodyFormats: Set<BodyFormat>): List<EventHubMessage> {
         val partitionInfo = partitionManager.getPartitionInfo(hubId, partitionId)
         ensurePartitionReceiver(hubId, partitionId, partitionInfo)
         val (partitionReceiver, receiverPosition, messagesMap) = partitionMessages[hubId]!![partitionId]!!
-        if (receiverPosition.currentSequenceNumber < partitionInfo.lastEnqueuedSequenceNumber) {
-            receiveMessages(partitionReceiver, partitionInfo.lastEnqueuedSequenceNumber, messagesMap, receiverPosition)
+        if (receiverPosition.sequenceNumber < partitionInfo.lastEnqueuedSequenceNumber) {
+            receiveMessages(partitionReceiver, PartitionReceiverPosition.ofSequenceTarget(partitionInfo.lastEnqueuedSequenceNumber), messagesMap, receiverPosition)
         }
-        return partitionMessages[hubId]!![partitionId]!!.third.values
-                .map { convertToEventHubMessage(it, partitionId, hubId, false) }
+        return partitionMessages[hubId]!![partitionId]!!.messagesMap.values
+                .map { convertToEventHubMessage(it, partitionId, hubId, bodyFormats) }
                 .sortedByDescending { it.enqueuedDateTime }
     }
 
-    fun getMessageBySequenceNumber(hubId: String, partitionId: String, sequenceNumber: Long, includeBody: Boolean = true): EventHubMessage {
+    fun getMessageBySequenceNumber(hubId: String, partitionId: String, sequenceNumber: Long, includedBodyFormats: Set<BodyFormat>): EventHubMessage {
+        ensurePartitionReceiver(hubId, partitionId)
+        val (partitionReceiver, receiverPosition, messagesMap) = partitionMessages[hubId]!![partitionId]!!
+
+        if (receiverPosition.sequenceNumber < sequenceNumber) {
+            receiveMessages(partitionReceiver, PartitionReceiverPosition.ofSequenceTarget(sequenceNumber), messagesMap, receiverPosition)
+        }
+        val eventData = partitionMessages[hubId]!![partitionId]!!.messagesMap[sequenceNumber]
+                ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Message not found")
+        return convertToEventHubMessage(eventData, partitionId, hubId, includedBodyFormats)
+    }
+
+    fun queryMessages(hubId: String, partitionId: String, queryParams: MessageQueryParams, includedBodyFormats: Set<BodyFormat>): List<EventHubMessage> {
         val partitionInfo = partitionManager.getPartitionInfo(hubId, partitionId)
         ensurePartitionReceiver(hubId, partitionId, partitionInfo)
         val (partitionReceiver, receiverPosition, messagesMap) = partitionMessages[hubId]!![partitionId]!!
-
-        if (receiverPosition.currentSequenceNumber < sequenceNumber) {
-            receiveMessages(partitionReceiver, sequenceNumber, messagesMap, receiverPosition)
+        val targetPosition = PartitionReceiverPosition(
+                min(queryParams.sequenceNumberRange.last, partitionInfo.lastEnqueuedSequenceNumber),
+                queryParams.timestampRange.endInclusive.toInstant(),
+                queryParams.offsetRange.last)
+        if (receiverPosition < targetPosition) {
+            receiveMessages(partitionReceiver, targetPosition, messagesMap, receiverPosition)
         }
-        val eventData = partitionMessages[hubId]!![partitionId]!!.third[sequenceNumber]
-                ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Message not found")
-        return convertToEventHubMessage(eventData, partitionId, hubId, includeBody)
+        return partitionMessages[hubId]!![partitionId]!!.messagesMap.values.filter { event ->
+            event.systemProperties.sequenceNumber in queryParams.sequenceNumberRange
+                    && event.systemProperties.offset.toLong() in queryParams.offsetRange
+                    && event.systemProperties.enqueuedTime.atZone(ZoneOffset.UTC) in queryParams.timestampRange
+                    && queryParams.partitionKey?.let { pk -> pk == event.systemProperties.partitionKey } ?: true
+                    && queryParams.properties?.all { p -> p.key in event.properties && (p.value?.let { v -> v == event.properties[p.key] } ?: true) } ?: true }
+                .map { convertToEventHubMessage(it, partitionId, hubId, includedBodyFormats) }
+                .sortedByDescending { it.enqueuedDateTime }
     }
 
-    private fun receiveMessages(partitionReceiver: PartitionReceiver, targetSequenceNumber: Long, messagesMap: MutableMap<Long, EventData>, receiverPosition: PartitionReceiverPosition) {
+    private fun receiveMessages(partitionReceiver: PartitionReceiver, targetPosition: PartitionReceiverPosition,
+                                messagesMap: MutableMap<Long, EventData>, receiverPosition: PartitionReceiverPosition) {
         do {
-            val messagesReceived = partitionReceiver.receiveSync(min(MAX_BATCH, (targetSequenceNumber - receiverPosition.currentSequenceNumber).toInt()))
+            val messagesReceived = partitionReceiver.receiveSync(min(MAX_SINGLE_RECEIVE, targetPosition.sequenceNumber - receiverPosition.sequenceNumber).toInt())
             messagesReceived?.forEach {
                 messagesMap[it.systemProperties.sequenceNumber] = it
             }
-            messagesReceived?.lastOrNull()?.let{ receiverPosition.currentSequenceNumber = it.systemProperties.sequenceNumber }
-        } while (receiverPosition.currentSequenceNumber < targetSequenceNumber && messagesReceived?.count() ?: 0 > 0)
+            messagesReceived?.lastOrNull()?.let {
+                receiverPosition.sequenceNumber = it.systemProperties.sequenceNumber
+                receiverPosition.offset = it.systemProperties.offset.toLong()
+                receiverPosition.timestamp = it.systemProperties.enqueuedTime
+            }
+        } while (receiverPosition < targetPosition && messagesReceived?.count() ?: 0 > 0)
     }
 
-    private fun ensurePartitionReceiver(hubId: String, partitionId: String, partitionInfo: PartitionInfo) {
+    private fun ensurePartitionReceiver(hubId: String, partitionId: String, partitionInfo: PartitionInfo? = null) {
         if (hubId !in partitionMessages) partitionMessages[hubId] = ConcurrentHashMap()
         if (partitionId !in partitionMessages[hubId]!!) {
             val (eventHubConnection, eventHubClient) = connectionManager.getHubConnectionConfig(hubId)
+            val receiverOptions = ReceiverOptions()
+            receiverOptions.prefetchCount = 1999
             val receiver = eventHubClient.createReceiverSync(eventHubConnection.consumerGroupName, partitionId,
-                    EventPosition.fromStartOfStream())
+                    EventPosition.fromStartOfStream(), receiverOptions)
             receiver.receiveTimeout = Duration.ofSeconds(20)
-            partitionMessages[hubId]!![partitionId] = Triple(receiver, PartitionReceiverPosition(partitionInfo.beginSequenceNumber - 1),
+            partitionMessages[hubId]!![partitionId] = PartitionState(receiver, PartitionReceiverPosition(
+                    (partitionInfo ?: partitionManager.getPartitionInfo(hubId, partitionId)).beginSequenceNumber - 1),
                     ConcurrentHashMap())
         }
     }
 
-    fun convertToEventHubMessage(eventData: EventData, partitionId: String, hubId: String, includeBody: Boolean = true): EventHubMessage {
-        val (bodyBase64, bodyString, bodyJson, charset) = if (includeBody) readEventContent(eventData) else BodyRepresentation()
+    private fun convertToEventHubMessage(eventData: EventData, partitionId: String, hubId: String, includedBodyFormats: Set<BodyFormat>): EventHubMessage {
+        val (bodyBase64, bodyString, bodyJson, charset) = messageParser.readEventContent(eventData, includedBodyFormats)
         return EventHubMessage(
                 eventData.systemProperties.sequenceNumber, partitionId,
                 eventData.systemProperties.enqueuedTime.atZone(ZoneOffset.UTC),
@@ -94,52 +115,29 @@ class PartitionReader(val partitionManager: PartitionManager,
                 "/hubs/$hubId/partitions/$partitionId/messages/${eventData.systemProperties.sequenceNumber}",
                 bodyBase64, bodyString, bodyJson, charset)
     }
+}
 
-    private fun readEventContent(data: EventData): BodyRepresentation {
-        if (data.bytes == null) {
-            return BodyRepresentation(null, null, null, null)
-        }
-        val bodyBase64 = Base64.getEncoder().encode(data.bytes).toString(StandardCharsets.UTF_8)
-        val bodyBytes = if (data.properties["ContentEncoding"] == "gzip") GZIPInputStream(data.bytes.inputStream()).readAllBytes() else data.bytes
-        val detectedCharset: Charset? = try {
-            detectBodyCharset(bodyBytes.inputStream())
-        } catch (ex: UnsupportedCharsetException) {
-            null
-        }
-        val bodyString: String? = try {
-            detectedCharset?.let { bodyBytes.toString(it) } ?: bodyBytes.toString(StandardCharsets.UTF_8)
-        } catch (ex: Exception) {
-            null
-        }
-        val bodyJson = try {
-            mapper.readTree(bodyString)
-        } catch (ex: JsonParseException) {
-            null
-        }
-        return BodyRepresentation(bodyBase64, bodyString, bodyJson, detectedCharset)
+private data class PartitionReceiverPosition(
+        var sequenceNumber: Long = -1,
+        var timestamp: Instant = Instant.MIN,
+        var offset: Long = 0
+) : Comparable<PartitionReceiverPosition> {
+    override fun compareTo(other: PartitionReceiverPosition): Int {
+        val sequenceComparison = sequenceNumber.compareTo(other.sequenceNumber)
+        val offsetComparison = offset.compareTo(other.offset)
+        val timestampComparison = timestamp.compareTo(other.timestamp)
+        return arrayOf(sequenceComparison, offsetComparison, timestampComparison).max()!!
     }
 
-    private fun detectBodyCharset(bodyStream: InputStream): Charset? {
-        val charsetDetector = UniversalDetector(null)
-        var nread: Int
-        val buf = ByteArray(4096)
-
-        while (bodyStream.available() > 0 && !charsetDetector.isDone) {
-            nread = bodyStream.read(buf)
-            charsetDetector.handleData(buf, 0, nread)
+    companion object {
+        fun ofSequenceTarget(sequenceNumber: Long): PartitionReceiverPosition {
+            return PartitionReceiverPosition(sequenceNumber, Instant.MAX, Long.MAX_VALUE)
         }
-        charsetDetector.dataEnd()
-        return charsetDetector.detectedCharset?.let { Charset.forName(it) }
     }
 }
 
-data class BodyRepresentation(
-        val base64: String? = null,
-        val string: String? = null,
-        val json: JsonNode? = null,
-        val charset: Charset? = null
-)
-
-data class PartitionReceiverPosition(
-        var currentSequenceNumber: Long = -1
+private data class PartitionState(
+        val partitionReceiver: PartitionReceiver,
+        val partitionReceiverPosition: PartitionReceiverPosition,
+        val messagesMap: MutableMap<Long, EventData>
 )

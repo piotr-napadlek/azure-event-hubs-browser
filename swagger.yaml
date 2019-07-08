@@ -1,6 +1,6 @@
 openapi: 3.0.0
 info:
-  description: "Api for browsing Event Hub entities"
+  description: "Api for browsing Event Hub events"
   title: "EventHub REST Api"
   version: 1.0.0
 paths:
@@ -140,11 +140,9 @@ paths:
       operationId: getPartitionMessages
       parameters:
         - $ref: '#/components/parameters/HubId'
-        - name: partitionId
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/PartitionId'
+        - $ref: '#/components/parameters/IncludeBody'
+        - $ref: '#/components/parameters/BodyFormat'
       responses:
         200:
           description: List of partition messages
@@ -154,29 +152,93 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/EventHubMessage'
+  /hubs/{hubId}/partitions/{partitionId}/messages/query:
+    get:
+      summary: Performs a query on a partition based on a given query parameters.
+      operationId: queryMessages
+      description: Query messages on a partition. At least one of search preconditions should be given, otherwise Bad Request will be return.
+      parameters:
+        - $ref: '#/components/parameters/HubId'
+        - $ref: '#/components/parameters/PartitionId'
+        - $ref: '#/components/parameters/IncludeBody'
+        - $ref: '#/components/parameters/BodyFormat'
+        - name: fromTimestamp
+          in: query
+          required: false
+          schema:
+            type: string
+            format: 'date-time'
+        - name: toTimestamp
+          in: query
+          required: false
+          schema:
+            type: string
+            format: 'date-time'
+        - name: fromSequenceNumber
+          in: query
+          schema:
+            type: number
+            format: int64
+        - name: toSequenceNumber
+          in: query
+          required: false
+          schema:
+            type: number
+            format: int64
+        - name: fromOffset
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: toOffset
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: partitionKey
+          in: query
+          description: Only return results where partition key is equal to parameter
+          required: false
+          schema:
+            type: string
+        - name: property
+          in: query
+          description: Allows to search for messages containing given property or with a property of a given value. Multiple property parameters can be specified
+          examples:
+            simpleQuery:
+              value: "property=EventId"
+            multipleValues:
+              value: "property=EventType=RoomTypeOverbooking&property=EventId&property=EventVersion=1"
+          required: false
+          schema:
+            type: string
+#        examples:
+#          dateBasedQuery:
+#            value: /hubs/hub-namespace/hub-name/partitions/0/messages/query?fromTimestamp=2019-07-02T00:00:00.001Z&toTimestamp=2019-07-04T15:00:03.123Z
+
+      responses:
+        200:
+          description: List of found messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  - $ref: '#/components/schemas/EventHubMessage'
   /hubs/{hubId}/partitions/{partitionId}/messages/{sequenceNumber}:
     get:
       summary: Reads single message from the stream by sequence number
       operationId: getOneBySequenceNumber
       parameters:
         - $ref: '#/components/parameters/HubId'
-        - name: partitionId
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/PartitionId'
         - name: sequenceNumber
           in: path
           required: true
           schema:
             type: string
-        - name: includeBody
-          in: query
-          required: false
-          description: Indicates whether message body should be included. Set to false to fetch only metadata.
-          schema:
-            type: boolean
-            default: true
+        - $ref: '#/components/parameters/IncludeBody'
+        - $ref: '#/components/parameters/BodyFormat'
       responses:
         200:
           description: Single event hub message
@@ -194,6 +256,31 @@ components:
       description: ID of updated Event Hub connection
       schema:
         type: string
+    PartitionId:
+      name: partitionId
+      in: path
+      required: true
+      schema:
+        type: string
+    IncludeBody:
+      name: includeBody
+      in: query
+      required: false
+      description: Indicates whether message body should be included. Set to false to fetch only metadata.
+      schema:
+        type: boolean
+        default: false
+    BodyFormat:
+      name: bodyFormat
+      in: query
+      required: false
+      description: Describes the type of body to return. Valid only if includeBody is set tu true. All applicable formats are included if omitted. Can return nulls if body type is not compatible with selected format.
+      schema:
+        type: string
+        enum:
+          - JSON
+          - STRING
+          - BASE64
   schemas:
     EventHubConnection:
       description: Represents an existing event hub connection
@@ -329,7 +416,7 @@ components:
         properties:
           type: object
           additionalProperties:
-            type: string|number
+            type: string|number|boolean
         bodyString:
           type: string
         bodyBytesBase64:
