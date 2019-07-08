@@ -1,0 +1,60 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: {{ include "event-hub-browser.fullname" . }}
+  labels:
+    app: {{ include "event-hub-browser.name" . }}
+    chart: {{ include "event-hub-browser.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "event-hub-browser.name" . }}
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "event-hub-browser.name" . }}
+        release: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+{{- with .Values.env }}
+          env:
+{{- range $envKey,$envValue := . }}
+            - name: {{ $envKey | quote }}
+              value: {{ $envValue | quote }}
+{{- end }}
+{{- end }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.container.port }}
+              protocol: TCP
+          {{- if (.Values.probes.liveness.path) ne "" }}
+          livenessProbe:
+            {{- include "probe" .Values.probes.liveness | nindent 12 }}
+          {{- end }}
+          {{- if (.Values.probes.readiness.path) ne "" }}
+          readinessProbe:
+            {{- include "probe" .Values.probes.readiness | nindent 12 }}
+          {{- end }}
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+      imagePullSecrets: 
+{{ toYaml .Values.image.imagePullSecrets | indent 8 }}
+    {{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}

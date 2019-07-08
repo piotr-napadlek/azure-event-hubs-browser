@@ -82,3 +82,8 @@ stages:
               tags: |
                 latest
                 $(Build.BuildNumber)
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Artifact: helm'
+            inputs:
+              PathtoPublish: helm
+              ArtifactName: helm

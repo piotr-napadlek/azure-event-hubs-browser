@@ -1,0 +1,43 @@
+{{- if .Values.ingress.enabled -}}
+{{- $fullName := include "event-hub-browser.fullname" . -}}
+{{- $ingressPath := .Values.ingress.path -}}
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: {{ $fullName }}
+  labels:
+    app: {{ include "event-hub-browser.name" . }}
+    chart: {{ include "event-hub-browser.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+  annotations:
+{{- if .Values.ingress.letsEncrypt.enabled }}
+    certmanager.k8s.io/cluster-issuer: letsencrypt-{{ .Values.ingress.letsEncrypt.issuer }}
+{{- end }}
+{{ toYaml .Values.ingress.annotations | indent 4 }}
+spec:
+{{- if .Values.ingress.tls }}
+  tls:
+  {{- range .Values.ingress.tls }}
+    - hosts:
+      {{- range .hosts }}
+        - {{ . | quote }}
+      {{- end }}
+      {{- if eq $.Values.ingress.letsEncrypt.enabled true }}
+      secretName: "tls-{{ index .hosts 0 }}"
+      {{- else }}
+      secretName: {{ .secretName }}
+      {{- end }}
+  {{- end }}
+{{- end }}
+  rules:
+  {{- range .Values.ingress.hosts }}
+    - host: {{ . | quote }}
+      http:
+        paths:
+          - path: {{ $ingressPath }}
+            backend:
+              serviceName: {{ $fullName }}
+              servicePort: http
+  {{- end }}
+{{- end }}

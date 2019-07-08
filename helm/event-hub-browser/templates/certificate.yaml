@@ -1,0 +1,30 @@
+{{- if .Values.ingress.letsEncrypt.enabled -}}
+  {{- if .Values.ingress.enabled -}}
+    {{- $fullName := include "event-hub-browser.fullname" . -}}
+    {{- if .Values.ingress.tls }}
+      {{- range .Values.ingress.tls }}
+apiVersion: certmanager.k8s.io/v1alpha1
+kind: Certificate
+metadata:
+  name: "tls-{{ index .hosts 0 }}"
+spec:
+  secretName: "tls-{{ index .hosts 0 }}"
+  dnsNames:
+  {{- range .hosts }}
+  - {{ . | quote }}
+  {{- end }}
+  acme:
+    config:
+    - domains:
+      {{- range .hosts }}
+      - {{ . | quote }}
+      {{- end }}
+      ingressClass: nginx
+  issuerRef:
+    name: letsencrypt-{{ $.Values.ingress.letsEncrypt.issuer }}
+    kind: ClusterIssuer
+---      
+      {{- end }}
+    {{- end }}
+  {{- end }}
+{{- end }}

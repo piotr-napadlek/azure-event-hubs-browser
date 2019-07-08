@@ -1,0 +1,68 @@
+affinity: {}
+
+container: 
+  port: 8082
+
+env: 
+  ASPNETCORE_URLS: "http://*:8080"
+
+ingress: 
+  annotations: 
+    kubernetes.io/ingress.class: addon-http-application-routing
+    nginx.ingress.kubernetes.io/rewrite-target: /    
+  enabled: false
+  letsEncrypt:
+    enabled: false
+    issuer: staging
+
+image:
+  imagePullSecrets: 
+    - name: "registry-guestlineazurecrio"
+  pullPolicy: "IfNotPresent"
+  repository: ""
+  tag: "stable"
+
+istio:
+  virtualService:
+    enabled: false
+
+# nameOverride: ""
+
+nodeSelector: {}
+
+probes:
+  liveness: 
+    failureThreshold: 3
+    initialDelaySeconds: 30
+    path: ""
+    periodSeconds: 10
+    successThreshold: 1
+
+  readiness:
+    failureThreshold: 3
+    initialDelaySeconds: 30
+    path: ""
+    periodSeconds: 10
+    successThreshold: 1
+
+replicaCount: 1
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #  cpu: 100m
+  #  memory: 128Mi
+  # requests:
+  #  cpu: 100m
+  #  memory: 128Mi
+
+service:
+  port: 80
+  type: ClusterIP
+
+teamName: ""
+
+tolerations: []
