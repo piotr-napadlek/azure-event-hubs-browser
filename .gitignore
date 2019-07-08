@@ -4,6 +4,8 @@ target/
 !**/src/main/**
 !**/src/test/**
 
+settings.xml
+
 ### STS ###
 .apt_generated
 .classpath

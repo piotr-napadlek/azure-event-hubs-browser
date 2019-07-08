@@ -1,0 +1,84 @@
+name: $(Date:yyyyMMdd)_$(Rev:rr)_$(BuildID)
+trigger:
+  - master
+variables:
+  - group: Nexus
+stages:
+  - stage: build
+    displayName: Master build
+    jobs:
+      - job: run_tf_plan
+        displayName: Run terraform plan
+        pool: Hosted Ubuntu 1604
+        steps:
+          - task: eliostruyf.build-task.custom-build-task.file-creator@4
+            displayName: 'Create settings.xml'
+            inputs:
+              fileoverwrite: true
+              filepath: settings.xml
+              endWithNewLine: true
+              filecontent: |
+                <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                  http://maven.apache.org/xsd/settings-1.0.0.xsd">
+                  <localRepository/>
+                  <interactiveMode>false</interactiveMode>
+                  <usePluginRegistry/>
+                  <offline/>
+                  <servers>
+                    <server>
+                      <id>guestline-releases</id>
+                      <username>VSTS</username>
+                      <password>$(maven.nexusPassword)</password>
+                    </server>
+                    <server>
+                      <id>guestline-snapshots</id>
+                      <username>VSTS</username>
+                      <password>$(maven.nexusPassword)</password>
+                    </server>
+                  </servers>
+                  <mirrors/>
+                  <proxies/>
+                  <profiles>
+                    <profile>
+                      <id>guestline</id>
+                      <repositories>
+                        <repository>
+                          <id>guestline-releases</id>
+                          <url>https://nexus.guestline.com/repository/maven-releases/</url>
+                          <snapshots>
+                            <enabled>false</enabled>
+                          </snapshots>
+                          <releases>
+                            <enabled>true</enabled>
+                          </releases>
+                        </repository>
+                        <repository>
+                          <id>guestline-snapshots</id>
+                          <url>https://nexus.guestline.com/repository/maven-snapshots/</url>
+                          <snapshots>
+                            <enabled>true</enabled>
+                          </snapshots>
+                          <releases>
+                            <enabled>false</enabled>
+                          </releases>
+                        </repository>
+                      </repositories>
+                    </profile>
+                  </profiles>
+                  <activeProfiles>
+                    <activeProfile>guestline</activeProfile>
+                  </activeProfiles>
+                </settings>
+
+          - task: Docker@2
+            displayName: 'Build and push an image'
+            inputs:
+              containerRegistry: guestline-prod-registry
+              command: buildAndPush
+              repository: '$(Build.Repository.Name)'
+              imageName: '$(Build.Repository.Name):$(Build.BuildNumber)'
+              tags:
+                - latest
+                - '$(Build.BuildNumber)'
