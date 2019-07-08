@@ -1,4 +1,4 @@
-name: $(Date:yyyyMMdd)_$(Rev:rr)_$(BuildID)
+name: $(Date:yyyyMMdd)-$(Rev:rr)
 trigger:
   - master
 variables:
@@ -79,6 +79,6 @@ stages:
               command: buildAndPush
               repository: '$(Build.Repository.Name)'
               imageName: '$(Build.Repository.Name):$(Build.BuildNumber)'
-              tags:
-                - latest
-                - '$(Build.BuildNumber)'
+              tags: |
+                latest
+                $(Build.BuildNumber)
