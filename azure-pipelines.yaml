@@ -7,8 +7,8 @@ stages:
   - stage: build
     displayName: Master build
     jobs:
-      - job: run_tf_plan
-        displayName: Run terraform plan
+      - job: build_and_push
+        displayName: Build and push dockerfile
         pool: Hosted Ubuntu 1604
         steps:
           - task: eliostruyf.build-task.custom-build-task.file-creator@4
