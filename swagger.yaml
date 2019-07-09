@@ -1,6 +1,19 @@
 openapi: 3.0.0
 info:
-  description: "Api for browsing Event Hub events"
+  description: |
+    Api for browsing Event Hub events.
+    Use for monitoring, testing and debugging your event hub.
+
+    TODO:
+    - Unit, Integration and e2e tests
+    - Browsing and querying hubs rather than specific partitions
+    - Sending, copying messages across hub connections
+    - Results pagination
+    - Optimize reading from partitions (not reading too much if unnecessary)
+    - Simple UI for viewing messages
+    - Integration with Azure AD and discovery of available eventhubs
+    - Service Bus integration
+    - Persistence layer (on demand)
   title: "EventHub REST Api"
   version: 1.0.0
 servers:
