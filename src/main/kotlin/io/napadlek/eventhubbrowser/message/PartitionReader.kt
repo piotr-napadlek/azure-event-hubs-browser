@@ -7,6 +7,7 @@ import com.microsoft.azure.eventhubs.ReceiverOptions
 import io.napadlek.eventhubbrowser.hub.EventHubConnectionManager
 import io.napadlek.eventhubbrowser.partition.PartitionInfo
 import io.napadlek.eventhubbrowser.partition.PartitionManager
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
 import org.springframework.web.context.annotation.SessionScope
@@ -14,8 +15,10 @@ import org.springframework.web.server.ResponseStatusException
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
-import javax.servlet.http.Part
+import java.util.concurrent.TimeUnit
+import javax.annotation.PreDestroy
 import kotlin.math.min
 
 @Component
@@ -23,12 +26,21 @@ import kotlin.math.min
 class PartitionReader(val partitionManager: PartitionManager,
                       val connectionManager: EventHubConnectionManager,
                       val messageParser: MessageParser) {
+    private val logger = LoggerFactory.getLogger(this.javaClass)
 
     companion object {
         const val MAX_SINGLE_RECEIVE = 500L
     }
 
     private val partitionMessages: MutableMap<String, MutableMap<String, PartitionState>> = ConcurrentHashMap()
+
+    @PreDestroy
+    fun closeReceivers() {
+        logger.info("Closing all ${partitionMessages.values.flatMap { it.values }.count()} receivers.")
+        val closingReceivers = partitionMessages.values.flatMap { it.values }.map { it.partitionReceiver.close() }
+        CompletableFuture.allOf(*closingReceivers.toTypedArray()).get(20, TimeUnit.SECONDS)
+        logger.info("Partition receivers closed.")
+    }
 
     fun getAllMessages(hubId: String, partitionId: String, bodyFormats: Set<BodyFormat>): List<EventHubMessage> {
         val partitionInfo = partitionManager.getPartitionInfo(hubId, partitionId)
