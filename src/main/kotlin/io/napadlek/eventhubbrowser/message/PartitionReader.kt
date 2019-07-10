@@ -1,9 +1,6 @@
 package io.napadlek.eventhubbrowser.message
 
-import com.microsoft.azure.eventhubs.EventData
-import com.microsoft.azure.eventhubs.EventPosition
-import com.microsoft.azure.eventhubs.PartitionReceiver
-import com.microsoft.azure.eventhubs.ReceiverOptions
+import com.microsoft.azure.eventhubs.*
 import io.napadlek.eventhubbrowser.hub.EventHubConnectionManager
 import io.napadlek.eventhubbrowser.partition.PartitionInfo
 import io.napadlek.eventhubbrowser.partition.PartitionManager
@@ -108,12 +105,18 @@ class PartitionReader(val partitionManager: PartitionManager,
             val (eventHubConnection, eventHubClient) = connectionManager.getHubConnectionConfig(hubId)
             val receiverOptions = ReceiverOptions()
             receiverOptions.prefetchCount = 1999
-            val receiver = eventHubClient.createReceiverSync(eventHubConnection.consumerGroupName, partitionId,
-                    EventPosition.fromStartOfStream(), receiverOptions)
-            receiver.receiveTimeout = Duration.ofSeconds(20)
-            partitionMessages[hubId]!![partitionId] = PartitionState(receiver, PartitionReceiverPosition(
-                    (partitionInfo ?: partitionManager.getPartitionInfo(hubId, partitionId)).beginSequenceNumber - 1),
-                    ConcurrentHashMap())
+            try {
+                val receiver = eventHubClient.createReceiverSync(eventHubConnection.consumerGroupName, partitionId,
+                        EventPosition.fromStartOfStream(), receiverOptions)
+                receiver.receiveTimeout = Duration.ofSeconds(20)
+                partitionMessages[hubId]!![partitionId] = PartitionState(receiver, PartitionReceiverPosition(
+                        (partitionInfo ?: partitionManager.getPartitionInfo(hubId, partitionId)).beginSequenceNumber - 1),
+                        ConcurrentHashMap())
+            } catch (e: ReceiverDisconnectedException) {
+                logger.warn("Could not create receiver. Is consumer group not in use?")
+                throw ResponseStatusException(HttpStatus.CONFLICT, "Can't connect to partition $partitionId on hub $hubId with consumer group " +
+                        "${eventHubConnection.consumerGroupName}. Is it in use already?")
+            }
         }
     }
 
