@@ -13,7 +13,7 @@ class SessionListener : HttpSessionListener {
     private val logger = LoggerFactory.getLogger(this.javaClass)
 
     override fun sessionCreated(event: HttpSessionEvent) {
-        event.session.maxInactiveInterval = 130 * 1000
+        event.session.maxInactiveInterval = 60 * 30
         logger.info("Session created: sessionId: ${event.session.id}, createdAt: ${LocalDateTime.ofInstant(Instant.ofEpochMilli(event.session.creationTime), ZoneOffset.UTC)}")
     }
 
