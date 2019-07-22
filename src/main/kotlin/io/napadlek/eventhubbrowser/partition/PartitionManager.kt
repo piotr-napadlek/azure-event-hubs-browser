@@ -1,6 +1,7 @@
 package io.napadlek.eventhubbrowser.partition
 
 import com.microsoft.azure.eventhubs.EventHubClient
+import com.microsoft.azure.eventhubs.PartitionRuntimeInformation
 import io.napadlek.eventhubbrowser.hub.EventHubConnectionManager
 import io.napadlek.eventhubbrowser.hub.EventHubStats
 import io.napadlek.eventhubbrowser.pmap
@@ -8,6 +9,7 @@ import org.springframework.stereotype.Component
 import org.springframework.web.context.annotation.SessionScope
 import java.time.ZoneOffset
 import java.util.concurrent.TimeUnit
+import kotlin.math.max
 
 @Component
 @SessionScope
@@ -30,11 +32,16 @@ class PartitionManager(val hubConnectionManager: EventHubConnectionManager) {
         return PartitionInfo(partitionRuntimeInformation.partitionId, partitionRuntimeInformation.lastEnqueuedSequenceNumber,
                 partitionRuntimeInformation.lastEnqueuedTimeUtc.atZone(ZoneOffset.UTC), partitionRuntimeInformation.lastEnqueuedOffset,
                 partitionRuntimeInformation.beginSequenceNumber,
-                (partitionRuntimeInformation.lastEnqueuedSequenceNumber - Math.max(partitionRuntimeInformation.beginSequenceNumber, 0)) + 1,
+                getActiveMessagesCount(partitionRuntimeInformation),
                 "/hubs/$hubId/partitions/$partitionId/messages/${partitionRuntimeInformation.lastEnqueuedSequenceNumber}",
                 "/hubs/$hubId/partitions/$partitionId",
-                "/hubs/$hubId/partitions/$partitionId/messages")
+                "/hubs/$hubId/partitions/$partitionId/messages",
+                partitionRuntimeInformation.isEmpty)
     }
+
+    private fun getActiveMessagesCount(partitionRuntimeInformation: PartitionRuntimeInformation) =
+            if (partitionRuntimeInformation.isEmpty) 0
+            else (partitionRuntimeInformation.lastEnqueuedSequenceNumber - max(partitionRuntimeInformation.beginSequenceNumber, 0)) + 1
 
 
     fun getHubStats(hubId: String): EventHubStats {

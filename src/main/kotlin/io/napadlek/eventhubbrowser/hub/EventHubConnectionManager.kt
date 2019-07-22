@@ -12,7 +12,7 @@ import java.util.concurrent.TimeoutException
 import javax.annotation.PreDestroy
 
 @Component
-@SessionScope(proxyMode = ScopedProxyMode.TARGET_CLASS)
+@SessionScope
 class EventHubConnectionManager {
     private val logger = LoggerFactory.getLogger(this.javaClass)
     private val hubConnections: MutableMap<String, Triple<EventHubConnection, EventHubClient, ScheduledExecutorService>> = ConcurrentHashMap()

@@ -6,7 +6,7 @@ info:
 
     TODO:
     - Unit, Integration and e2e tests
-    - Browsing and querying hubs rather than specific partitions
+    - ~~Browsing and querying hubs rather than specific partitions~~
     - Sending, copying messages across hub connections
     - Results pagination
     - Optimize reading from partitions (not reading too much if unnecessary)
@@ -14,8 +14,12 @@ info:
     - Integration with Azure AD and discovery of available eventhubs
     - Service Bus integration
     - Persistence layer (on demand)
+
+    Changelog:
+    - v1.1.0
+      - added query hub endpoint to query all partitions at once
   title: "EventHub REST Api"
-  version: 1.0.0
+  version: 1.1.0
 servers:
   - url: https://event-hub-browser.stage.guestline.app
 paths:
@@ -99,6 +103,64 @@ paths:
           description: In case of successfully removing hub connection
         204:
           description: In case a hub with the given ID did not exist
+  /hubs/{hubId}/messages/query:
+    get:
+      summary: Query hub messages
+      operationId: queryHubMessages
+      description: Search for events on all partitions of an event hub
+      parameters:
+        - $ref: '#/components/parameters/HubId'
+        - $ref: '#/components/parameters/IncludeBody'
+        - $ref: '#/components/parameters/BodyFormat'
+        - name: fromTimestamp
+          in: query
+          required: false
+          schema:
+            type: string
+            format: 'date-time'
+        - name: toTimestamp
+          in: query
+          required: false
+          schema:
+            type: string
+            format: 'date-time'
+        - name: fromOffset
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: toOffset
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: partitionKey
+          in: query
+          description: Only return results where partition key is equal to parameter
+          required: false
+          schema:
+            type: string
+        - name: property
+          in: query
+          description: Allows to search for messages containing given property or with a property of a given value. Multiple property parameters can be specified
+          examples:
+            simpleQuery:
+              value: "property=EventId"
+            multipleValues:
+              value: "property=EventType=RoomTypeOverbooking&property=EventId&property=EventVersion=1"
+          required: false
+          schema:
+            type: string
+      responses:
+        200:
+          description: List of found messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  - $ref: '#/components/schemas/EventHubMessage'
+
   /hubs/{hubId}/partitions:
     get:
       summary: Get partitions
@@ -178,7 +240,7 @@ paths:
   /hubs/{hubId}/partitions/{partitionId}/messages/query:
     get:
       summary: Query messages
-      operationId: queryMessages
+      operationId: queryPartitionMessages
       description: Query messages on a partition. At least one of search preconditions should be given, otherwise Bad Request will be return.
       parameters:
         - $ref: '#/components/parameters/HubId'
@@ -295,7 +357,7 @@ components:
       name: hubId
       required: true
       in: path
-      description: ID of updated Event Hub connection
+      description: ID of an Event Hub connection
       schema:
         type: string
     PartitionId:
@@ -405,6 +467,11 @@ components:
           type: string
         messagesLink:
           type: string
+        activeEventsCount:
+          type: number
+          format: int64
+        empty:
+          type: boolean
       example:
         id: 0
         partitionId: gl-ci-rlx-events/overbooking
