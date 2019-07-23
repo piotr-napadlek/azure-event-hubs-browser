@@ -3,6 +3,7 @@ package io.napadlek.eventhubbrowser.message
 import com.fasterxml.jackson.annotation.JsonInclude
 import java.nio.charset.Charset
 import java.time.ZonedDateTime
+import java.util.Comparator
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 data class EventHubMessage(
@@ -16,4 +17,12 @@ data class EventHubMessage(
         val bodyBytesBase64: String?,
         val bodyString: String?,
         val bodyJson: Any?,
-        val detectedCharset: Charset?)
+        val detectedCharset: Charset?) {
+
+    companion object {
+        val enqueuedDateTimeSorter: Comparator<EventHubMessage> = Comparator
+                .comparing(EventHubMessage::enqueuedDateTime)
+                .thenComparing(EventHubMessage::sequenceNumber)
+                .reversed()
+    }
+}

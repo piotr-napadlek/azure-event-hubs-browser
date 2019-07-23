@@ -71,10 +71,10 @@ class PartitionReader(val partitionManager: PartitionManager,
         val partitionInfos = partitionManager.getPartitionInfos(hubId)
         return partitionInfos.pmap(exec = ContextAwareThreadPoolExecutor(partitionInfos.size / 2)) {
             this.queryMessages(hubId, it.id, queryParams, includedBodyFormats, it)
-        }.flatten().sortedWith(Comparator.comparing(EventHubMessage::enqueuedDateTime).thenComparing(EventHubMessage::sequenceNumber).reversed())
+        }.flatten().sortedWith(EventHubMessage.enqueuedDateTimeSorter)
     }
 
-    fun queryPartitionMessages(hubId: String, partitionId: String, queryParams: MessageQueryParams, includedBodyFormats: Set<BodyFormat>) : List<EventHubMessage> {
+    fun queryPartitionMessages(hubId: String, partitionId: String, queryParams: MessageQueryParams, includedBodyFormats: Set<BodyFormat>): List<EventHubMessage> {
         return this.queryMessages(hubId, partitionId, queryParams, includedBodyFormats)
                 .sortedByDescending { it.sequenceNumber }
     }
@@ -95,7 +95,8 @@ class PartitionReader(val partitionManager: PartitionManager,
                     && event.systemProperties.offset.toLong() in queryParams.offsetRange
                     && event.systemProperties.enqueuedTime.atZone(ZoneOffset.UTC) in queryParams.timestampRange
                     && queryParams.partitionKey?.let { pk -> pk == event.systemProperties.partitionKey } ?: true
-                    && queryParams.properties?.all { p -> p.key in event.properties && (p.value?.let { v -> v == event.properties[p.key] } ?: true) } ?: true }
+                    && queryParams.properties?.all { p -> p.key in event.properties && (p.value?.let { v -> v == event.properties[p.key] } ?: true) } ?: true
+        }
                 .map { convertToEventHubMessage(it, partitionId, hubId, includedBodyFormats) }
 
     }
