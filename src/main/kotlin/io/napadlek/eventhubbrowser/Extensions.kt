@@ -13,7 +13,7 @@ fun <T, R> Collection<T>.pmap(
 
     val futures = this.map { exec.submit(Callable { transform(it) }) }
     exec.shutdown()
-    exec.awaitTermination(1, TimeUnit.DAYS)
+    exec.awaitTermination(30, TimeUnit.SECONDS)
     return futures.map { it.get() }
 }
 
