@@ -2,7 +2,6 @@ package io.napadlek.eventhubbrowser.hub
 
 import com.microsoft.azure.eventhubs.*
 import org.slf4j.LoggerFactory
-import org.springframework.context.annotation.ScopedProxyMode
 import org.springframework.stereotype.Component
 import org.springframework.web.context.annotation.SessionScope
 import java.time.Duration
