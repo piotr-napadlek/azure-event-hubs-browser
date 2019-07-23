@@ -25,7 +25,7 @@ class PartitionMessageController(val partitionReader: PartitionReader) {
                        @PathVariable partitionId: String,
                        @RequestParam(required = false, defaultValue = "false") includeBody: Boolean,
                        @RequestParam(required = false) bodyFormat: BodyFormat?): List<EventHubMessage> {
-        return partitionReader.getAllMessages(hubId(hubNamespace, hubName), partitionId, getBodyFormats(includeBody, bodyFormat))
+        return partitionReader.getAllPartitionMessages(hubId(hubNamespace, hubName), partitionId, getBodyFormats(includeBody, bodyFormat))
     }
 
     @GetMapping("query")
@@ -36,11 +36,12 @@ class PartitionMessageController(val partitionReader: PartitionReader) {
                       @RequestParam(required = false) bodyFormat: BodyFormat?,
                       @RequestParam queryMap: MultiValueMap<String, String>): List<EventHubMessage> {
         val messageQueryParams = MessageQueryParams(queryMap)
-        return partitionReader.queryMessages(hubId(hubNamespace, hubName), partitionId, messageQueryParams, getBodyFormats(includeBody, bodyFormat))
+        return partitionReader.queryPartitionMessages(hubId(hubNamespace, hubName), partitionId, messageQueryParams, getBodyFormats(includeBody, bodyFormat))
     }
 
-    private fun getBodyFormats(includeBody: Boolean, targetFormat: BodyFormat?): Set<BodyFormat> {
-        val includedBodyFormats = if (includeBody) targetFormat?.let { arrayOf(it) } ?: BodyFormat.values() else emptyArray()
-        return includedBodyFormats.toSet()
-    }
+}
+
+fun getBodyFormats(includeBody: Boolean, targetFormat: BodyFormat?): Set<BodyFormat> {
+    val includedBodyFormats = if (includeBody) targetFormat?.let { arrayOf(it) } ?: BodyFormat.values() else emptyArray()
+    return includedBodyFormats.toSet()
 }

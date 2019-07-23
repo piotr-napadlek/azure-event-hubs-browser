@@ -2,7 +2,6 @@ package io.napadlek.eventhubbrowser.hub
 
 import com.microsoft.azure.eventhubs.*
 import org.slf4j.LoggerFactory
-import org.springframework.context.annotation.ScopedProxyMode
 import org.springframework.stereotype.Component
 import org.springframework.web.context.annotation.SessionScope
 import java.time.Duration
@@ -12,7 +11,7 @@ import java.util.concurrent.TimeoutException
 import javax.annotation.PreDestroy
 
 @Component
-@SessionScope(proxyMode = ScopedProxyMode.TARGET_CLASS)
+@SessionScope
 class EventHubConnectionManager {
     private val logger = LoggerFactory.getLogger(this.javaClass)
     private val hubConnections: MutableMap<String, Triple<EventHubConnection, EventHubClient, ScheduledExecutorService>> = ConcurrentHashMap()

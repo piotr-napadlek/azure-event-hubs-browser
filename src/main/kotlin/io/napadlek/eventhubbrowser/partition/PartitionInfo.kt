@@ -13,5 +13,6 @@ data class PartitionInfo(
         val activeEventsCount: Long,
         val lastEnqueuedLink: String,
         val selfLink: String,
-        val messagesLink: String
+        val messagesLink: String,
+        val empty: Boolean
 )
