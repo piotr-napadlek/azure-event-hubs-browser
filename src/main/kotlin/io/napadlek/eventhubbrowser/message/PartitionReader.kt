@@ -70,7 +70,7 @@ class PartitionReader(val partitionManager: PartitionManager,
     fun queryMessages(hubId: String, queryParams: MessageQueryParams, includedBodyFormats: Set<BodyFormat>): List<EventHubMessage> {
         val partitionInfos = partitionManager.getPartitionInfos(hubId)
         return partitionInfos.pmap(exec = ContextAwareThreadPoolExecutor(partitionInfos.size / 2)) {
-            this.queryMessages(hubId, it.id, queryParams, includedBodyFormats, it, this.partitionMessages)
+            this.queryMessages(hubId, it.id, queryParams, includedBodyFormats, it)
         }.flatten().sortedWith(Comparator.comparing(EventHubMessage::enqueuedDateTime).thenComparing(EventHubMessage::sequenceNumber).reversed())
     }
 
@@ -80,8 +80,7 @@ class PartitionReader(val partitionManager: PartitionManager,
     }
 
     private fun queryMessages(hubId: String, partitionId: String, queryParams: MessageQueryParams, includedBodyFormats: Set<BodyFormat>,
-                              partitionInfo: PartitionInfo = partitionManager.getPartitionInfo(hubId, partitionId),
-                              partitionMessages: MutableMap<String, MutableMap<String, PartitionState>> = this.partitionMessages): List<EventHubMessage> {
+                              partitionInfo: PartitionInfo = partitionManager.getPartitionInfo(hubId, partitionId)): List<EventHubMessage> {
         ensurePartitionReceiver(hubId, partitionId, partitionInfo, partitionMessages)
         val (partitionReceiver, receiverPosition, messagesMap) = partitionMessages[hubId]!![partitionId]!!
         val targetPosition = PartitionReceiverPosition(
