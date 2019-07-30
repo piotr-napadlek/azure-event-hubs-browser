@@ -9,7 +9,9 @@ import org.springframework.stereotype.Component
 import org.springframework.web.context.annotation.SessionScope
 import java.time.ZoneOffset
 import java.util.concurrent.TimeUnit
+import kotlin.math.ceil
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 @Component
 @SessionScope
@@ -17,7 +19,7 @@ class PartitionManager(val hubConnectionManager: EventHubConnectionManager) {
 
     fun getPartitionInfos(hubId: String): List<PartitionInfo> {
         val (eventHubConnection, eventHubClient, _) = hubConnectionManager.getHubConnectionConfig(hubId)
-        return eventHubConnection.partitionIds.pmap(eventHubConnection.partitionCount?.let { it / 2 } ?: 1) {
+        return eventHubConnection.partitionIds.pmap(eventHubConnection.partitionCount?.let { ceil(it.toDouble() / 2.0).roundToInt() } ?: 1) {
             partitionRuntimeInformation(eventHubClient, it, hubId)
         }.sortedByDescending { it.lastEnqueuedDateTime }
     }

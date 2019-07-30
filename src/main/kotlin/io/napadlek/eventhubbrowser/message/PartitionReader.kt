@@ -19,7 +19,9 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import javax.annotation.PreDestroy
+import kotlin.math.ceil
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 const val MAX_SINGLE_RECEIVE = 100L
 const val PREFETCH_COUNT = 1999
@@ -69,7 +71,7 @@ class PartitionReader(val partitionManager: PartitionManager,
 
     fun queryMessages(hubId: String, queryParams: MessageQueryParams, includedBodyFormats: Set<BodyFormat>): List<EventHubMessage> {
         val partitionInfos = partitionManager.getPartitionInfos(hubId)
-        return partitionInfos.pmap(exec = ContextAwareThreadPoolExecutor(partitionInfos.size / 2)) {
+        return partitionInfos.pmap(exec = ContextAwareThreadPoolExecutor(ceil(partitionInfos.size.div(2.0)).roundToInt())) {
             this.queryMessages(hubId, it.id, queryParams, includedBodyFormats, it)
         }.flatten().sortedWith(EventHubMessage.enqueuedDateTimeSorter)
     }
