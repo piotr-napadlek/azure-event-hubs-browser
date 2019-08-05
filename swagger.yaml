@@ -7,7 +7,7 @@ info:
     TODO:
     - Unit, Integration and e2e tests
     - ~~Browsing and querying hubs rather than specific partitions~~
-    - Sending, copying messages across hub connections
+    - ~~Sending~~, copying messages across hub connections
     - Results pagination
     - Optimize reading from partitions (not reading too much if unnecessary)
     - Simple UI for viewing messages
@@ -103,6 +103,22 @@ paths:
           description: In case of successfully removing hub connection
         204:
           description: In case a hub with the given ID did not exist
+  /hubs/{hubId}/messages:
+    post:
+      summary: Send message
+      operationId: sendEventHubMessage
+      parameters:
+        - $ref: '#/components/parameters/HubId'
+      requestBody:
+        required: true
+        description: Event hub message content
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SentEventHubMessage'
+      responses:
+        202:
+          description: When sending message was successful
   /hubs/{hubId}/messages/query:
     get:
       summary: Query hub messages
@@ -548,3 +564,19 @@ components:
         bodyBytesBase64: eyJrZXkiOiJ2YWx1ZSJ9Cg==
         bodyJson:
           key: value
+    SentEventHubMessage:
+      description: Represents a new message being created
+      type: object
+      properties:
+        bodyString:
+          type: string
+          description: String representation of the body to send
+          required: true
+        properties:
+          type: object
+          additionalProperties:
+            type: string|number|boolean
+          description: Application properties to attach to message
+        partitionKey:
+          type: string
+          required: false
