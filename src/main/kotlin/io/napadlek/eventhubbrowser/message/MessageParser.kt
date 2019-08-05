@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.charset.UnsupportedCharsetException
 import java.util.*
 import java.util.zip.GZIPInputStream
+import java.util.zip.ZipException
 
 @Component
 class MessageParser(val mapper: ObjectMapper) {
@@ -19,7 +20,11 @@ class MessageParser(val mapper: ObjectMapper) {
             return BodyRepresentation(null, null, null, null)
         }
         val bodyBase64 = Base64.getEncoder().encode(data.bytes).toString(StandardCharsets.UTF_8)
-        val bodyBytes = if (data.properties["ContentEncoding"] == "gzip") GZIPInputStream(data.bytes.inputStream()).readAllBytes() else data.bytes
+        val bodyBytes = if (data.properties["ContentEncoding"] == "gzip") try {
+            GZIPInputStream(data.bytes.inputStream()).readAllBytes()
+        } catch (e: ZipException) {
+            data.bytes
+        } else data.bytes
         val detectedCharset: Charset? = try {
             detectBodyCharset(bodyBytes)
         } catch (ex: UnsupportedCharsetException) {
