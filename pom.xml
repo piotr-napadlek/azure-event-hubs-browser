@@ -53,7 +53,7 @@
 		<dependency>
 			<groupId>com.microsoft.azure</groupId>
 			<artifactId>azure-eventhubs</artifactId>
-			<version>2.3.0</version>
+			<version>3.2.1</version>
 		</dependency>
 		<!-- https://mvnrepository.com/artifact/com.googlecode.juniversalchardet/juniversalchardet -->
 		<dependency>
